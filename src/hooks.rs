@@ -6,6 +6,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
+use ulid::Ulid;
 
 const HOOK_MARKER: &str = "# Installed by git-drift; do not edit directly.";
 
@@ -71,5 +72,29 @@ pub fn init(repo: &Repository) -> Result<()> {
 }
 
 pub fn inject_change_id(message_file: PathBuf) -> Result<()> {
-    todo!("Append the changeid to the end of the commit message");
+    let commit_msg = fs::read_to_string(&message_file).with_context(|| {
+        format!(
+            "failed to read commit message at {}",
+            message_file.display()
+        )
+    })?;
+
+    if commit_msg
+        .lines()
+        .any(|line| line.starts_with("CHANGE-ID:"))
+    {
+        return Ok(());
+    }
+
+    let change_id = Ulid::r#gen();
+    let commit_msg = format!("{}\nCHANGE-ID: {}\n", commit_msg.trim_end(), change_id);
+
+    fs::write(&message_file, commit_msg).with_context(|| {
+        format!(
+            "failed to write commit message at {}",
+            message_file.display()
+        )
+    })?;
+
+    Ok(())
 }
